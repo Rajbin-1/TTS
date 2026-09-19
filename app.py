@@ -559,9 +559,90 @@ def delete_collection_item(item_id):
     return jsonify({"success": True})
 
 # ---------------------------------------------------------------------------
+# First-Run Desktop Shortcut Integration
+# ---------------------------------------------------------------------------
+def ensure_desktop_shortcut():
+    """
+    Silently creates a desktop shortcut 'TTS Studio.lnk' on Windows pointing to the
+    currently running executable on first launch.
+    Bypasses immediately on non-Windows platforms or if the shortcut already exists.
+    """
+    if sys.platform != "win32":
+        return
+
+    try:
+        # Determine actual executable path
+        if getattr(sys, "frozen", False):
+            # PyInstaller bundle: sys.executable is the true binary (e.g. C:\...\TTS_App.exe)
+            target_exe = sys.executable
+        else:
+            # Running as script in development
+            target_exe = os.path.abspath(sys.argv[0])
+
+        working_dir = os.path.dirname(target_exe)
+
+        # Detect Desktop path reliably across localized Windows environments
+        desktop_dir = None
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+            )
+            desktop_raw, _ = winreg.QueryValueEx(key, "Desktop")
+            winreg.CloseKey(key)
+            desktop_dir = os.path.expandvars(desktop_raw)
+        except Exception:
+            pass
+
+        if not desktop_dir or not os.path.exists(desktop_dir):
+            desktop_dir = os.path.expanduser("~/Desktop")
+
+        if not os.path.exists(desktop_dir):
+            return
+
+        shortcut_path = os.path.join(desktop_dir, "TTS Studio.lnk")
+
+        # Bypass immediately if shortcut already exists
+        if os.path.exists(shortcut_path):
+            return
+
+        # Prepare Windows hidden subprocess execution
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+
+        creationflags = 0x08000000  # CREATE_NO_WINDOW
+
+        # PowerShell WScript.Shell invocation for native .lnk generation without extra packages
+        ps_script = f"""
+        $WshShell = New-Object -ComObject WScript.Shell;
+        $Shortcut = $WshShell.CreateShortcut('{shortcut_path.replace("'", "''")}');
+        $Shortcut.TargetPath = '{target_exe.replace("'", "''")}';
+        $Shortcut.WorkingDirectory = '{working_dir.replace("'", "''")}';
+        $Shortcut.Description = 'Piper Neural TTS Studio';
+        $Shortcut.Save();
+        """
+
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps_script],
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            timeout=5,
+            check=False
+        )
+        print(f"[Desktop Integration] Created desktop shortcut: {shortcut_path}")
+    except Exception as e:
+        # Non-blocking: never allow shortcut errors to interrupt app startup
+        print(f"[Desktop Integration] Shortcut creation skipped: {e}")
+
+# ---------------------------------------------------------------------------
 # App Launcher
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Execute first-run desktop shortcut creation asynchronously
+    threading.Thread(target=ensure_desktop_shortcut, daemon=True).start()
+
     def launch_browser():
         webbrowser.open_new("http://127.0.0.1:5000/")
 

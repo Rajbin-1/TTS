@@ -7,9 +7,11 @@ import {
   FolderPlus,
   Trash2,
   Volume2,
+  VolumeX,
   BookOpen,
   X,
-  ShieldCheck
+  ShieldCheck,
+  Check
 } from "lucide-react";
 
 interface VoiceModel {
@@ -17,6 +19,7 @@ interface VoiceModel {
   name: string;
   accent: string;
   gender: string;
+  description: string;
 }
 
 interface HistoryItem {
@@ -38,12 +41,12 @@ interface ProjectItem {
 }
 
 const VOICES: VoiceModel[] = [
-  { key: "en_US-lessac-high", name: "Lessac", accent: "American", gender: "Female" },
-  { key: "en_US-amy-medium", name: "Amy", accent: "American", gender: "Female" },
-  { key: "en_US-ryan-high", name: "Ryan", accent: "American", gender: "Male" },
-  { key: "en_US-danny-low", name: "Danny", accent: "American", gender: "Male" },
-  { key: "en_GB-alan-medium", name: "Alan", accent: "British", gender: "Male" },
-  { key: "en_GB-southern_english_female-low", name: "Southern", accent: "British", gender: "Female" },
+  { key: "en_US-lessac-high", name: "Lessac", accent: "American", gender: "Female", description: "Clear, warm narrative tone" },
+  { key: "en_US-amy-medium", name: "Amy", accent: "American", gender: "Female", description: "Natural, expressive conversational" },
+  { key: "en_US-ryan-high", name: "Ryan", accent: "American", gender: "Male", description: "Deep, articulated documentary tone" },
+  { key: "en_US-danny-low", name: "Danny", accent: "American", gender: "Male", description: "Direct, rhythmic male voice" },
+  { key: "en_GB-alan-medium", name: "Alan", accent: "British", gender: "Male", description: "Refined British literary narrator" },
+  { key: "en_GB-southern_english_female-low", name: "Southern", accent: "British", gender: "Female", description: "Gentle British female accent" },
 ];
 
 export default function App() {
@@ -56,6 +59,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTrack, setActiveTrack] = useState<{ title: string; voice: string } | null>(null);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
 
   // Clean slate: no random mock history items or auto-tags
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -67,6 +71,58 @@ export default function App() {
   const charCount = text.length;
 
   const currentVoice = VOICES.find(v => v.key === selectedVoice) || VOICES[0];
+
+  const playVoicePreview = (voiceKey: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    // If already playing this voice, stop it
+    if (previewingVoiceKey === voiceKey) {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setPreviewingVoiceKey(null);
+      return;
+    }
+
+    const voice = VOICES.find(v => v.key === voiceKey) || VOICES[0];
+    setSelectedVoice(voiceKey);
+    setPreviewingVoiceKey(voiceKey);
+
+    const samplePhrase = `Hello, this is a preview of the ${voice.name} voice. Clear, natural speech for your reading.`;
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(samplePhrase);
+      utterance.rate = speed;
+
+      const availableVoices = window.speechSynthesis.getVoices();
+      const isBritish = voice.accent === "British";
+      const isFemale = voice.gender === "Female";
+      const targetLang = isBritish ? "en-GB" : "en-US";
+
+      const matched = availableVoices.find(v => {
+        const langMatch = v.lang.replace("_", "-").startsWith(targetLang);
+        if (!langMatch) return false;
+        const lower = v.name.toLowerCase();
+        if (isFemale) {
+          return lower.includes("female") || lower.includes("samantha") || lower.includes("zira") || lower.includes("victoria");
+        } else {
+          return lower.includes("male") || lower.includes("david") || lower.includes("george") || lower.includes("daniel");
+        }
+      }) || availableVoices.find(v => v.lang.replace("_", "-").startsWith(targetLang)) || availableVoices[0];
+
+      if (matched) {
+        utterance.voice = matched;
+      }
+
+      utterance.onend = () => setPreviewingVoiceKey(null);
+      utterance.onerror = () => setPreviewingVoiceKey(null);
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => setPreviewingVoiceKey(null), 1800);
+    }
+  };
 
   const handleGenerate = () => {
     if (!text.trim()) return;
@@ -152,7 +208,7 @@ export default function App() {
         {activeTab === "studio" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Main Text Input Column */}
-            <div className="lg:col-span-8 bg-[#131c2e] border border-[#1e293b] rounded-xl p-5 flex flex-col justify-between shadow-sm">
+            <div className="lg:col-span-7 bg-[#131c2e] border border-[#1e293b] rounded-xl p-5 flex flex-col justify-between shadow-sm">
               <div>
                 <div className="flex items-center justify-between mb-2.5">
                   <label className="text-xs font-medium text-slate-300">Document Text</label>
@@ -177,7 +233,7 @@ export default function App() {
                 <textarea
                   value={text}
                   onChange={e => setText(e.target.value)}
-                  rows={13}
+                  rows={14}
                   placeholder="Paste or write text to convert to speech..."
                   className="w-full bg-[#0a0f1d] border border-[#1e293b] rounded-lg p-3.5 text-sm text-slate-200 leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
                 />
@@ -191,7 +247,7 @@ export default function App() {
                 <button
                   onClick={handleGenerate}
                   disabled={isProcessing || !text.trim()}
-                  className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
                 >
                   {isProcessing ? (
                     <>
@@ -209,28 +265,90 @@ export default function App() {
             </div>
 
             {/* Right Settings Column */}
-            <div className="lg:col-span-4 flex flex-col gap-4">
+            <div className="lg:col-span-5 flex flex-col gap-4">
               <div className="bg-[#131c2e] border border-[#1e293b] rounded-xl p-5 shadow-sm">
-                <div className="text-xs font-medium text-slate-300 mb-4">Voice Settings</div>
-
-                {/* Voice Selection */}
-                <div className="mb-5">
-                  <label className="text-xs text-slate-400 block mb-1.5">Voice</label>
-                  <select
-                    value={selectedVoice}
-                    onChange={e => setSelectedVoice(e.target.value)}
-                    className="w-full bg-[#0a0f1d] border border-[#1e293b] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-slate-300">Select &amp; Preview Voice</span>
+                  <button
+                    onClick={() => playVoicePreview(selectedVoice)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    {VOICES.map(v => (
-                      <option key={v.key} value={v.key}>
-                        {v.name} ({v.accent} {v.gender})
-                      </option>
-                    ))}
-                  </select>
+                    {previewingVoiceKey === selectedVoice ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5" />
+                        <span>Stop Sample</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Preview Current</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Quick Audition Voice List */}
+                <div className="space-y-1.5 mb-5">
+                  {VOICES.map(v => {
+                    const isSelected = selectedVoice === v.key;
+                    const isPlayingThis = previewingVoiceKey === v.key;
+
+                    return (
+                      <div
+                        key={v.key}
+                        onClick={() => setSelectedVoice(v.key)}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-[#0a0f1d] border-indigo-500/80 text-white"
+                            : "bg-[#0a0f1d]/50 border-[#1e293b] text-slate-300 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                              isSelected ? "bg-indigo-600 text-white" : "border border-[#1e293b] text-transparent"
+                            }`}
+                          >
+                            <Check className="w-2.5 h-2.5" />
+                          </div>
+                          <div className="truncate">
+                            <div className="text-xs font-medium flex items-center gap-1.5">
+                              <span>{v.name}</span>
+                              <span className="text-[10px] text-slate-400">({v.accent} {v.gender})</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">{v.description}</div>
+                          </div>
+                        </div>
+
+                        {/* Dedicated 1-Click Preview Button */}
+                        <button
+                          onClick={(e) => playVoicePreview(v.key, e)}
+                          title={`Preview ${v.name}`}
+                          className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-all shrink-0 cursor-pointer ${
+                            isPlayingThis
+                              ? "bg-indigo-600 text-white shadow-sm"
+                              : "bg-[#131c2e] hover:bg-indigo-600 hover:text-white border border-[#1e293b] text-slate-300"
+                          }`}
+                        >
+                          {isPlayingThis ? (
+                            <>
+                              <VolumeX className="w-3 h-3 animate-pulse" />
+                              <span className="text-[10px]">Playing</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 fill-current" />
+                              <span className="text-[10px]">Sample</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Speed Slider */}
-                <div className="mb-5">
+                <div className="mb-4 pt-3 border-t border-[#1e293b]">
                   <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
                     <span>Speed</span>
                     <span className="text-slate-200 font-mono">{speed.toFixed(2)}x</span>
@@ -267,9 +385,9 @@ export default function App() {
                     className="w-full accent-indigo-500 bg-[#0a0f1d] rounded h-1.5 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>Short</span>
-                    <span>Standard</span>
-                    <span>Long</span>
+                    <span>Short (0s)</span>
+                    <span>Natural (0.2s)</span>
+                    <span>Long (1.5s)</span>
                   </div>
                 </div>
               </div>
@@ -424,7 +542,7 @@ export default function App() {
 
             <button
               onClick={() => setActiveTrack(null)}
-              className="text-xs text-slate-400 hover:text-white"
+              className="text-xs text-slate-400 hover:text-white cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -441,7 +559,7 @@ export default function App() {
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 Privacy &amp; Data Storage
               </div>
-              <button onClick={() => setShowPrivacy(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowPrivacy(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
