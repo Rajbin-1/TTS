@@ -3,262 +3,355 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline Book TTS Reader</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --accent: #6366f1;
-        }
-    </style>
+    <title>Piper Voice Studio</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="bg-[var(--bg)] text-slate-100 min-h-screen flex flex-col items-center justify-start p-6 font-sans">
-    <!-- Setup Skeleton Overlay -->
-    <div id="setup-skeleton" class="fixed inset-0 z-50 bg-[var(--bg)] flex flex-col items-center justify-center p-6 transition-opacity duration-500">
-        <div class="w-full max-w-md bg-[var(--card)] border border-slate-800 rounded-2xl p-8 shadow-2xl flex flex-col items-center text-center">
-            <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-3xl mb-4 animate-bounce">
-                🎙️
+<body>
+    <!-- Initial Boot Skeleton Screen -->
+    <div id="skeleton-overlay">
+        <div class="skeleton-card">
+            <div class="skeleton-icon-wrapper">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
             </div>
-            <h2 class="text-xl font-bold text-white mb-2">Initializing Offline TTS Engine...</h2>
-            <p id="setup-status-text" class="text-sm text-slate-400 mb-6">Checking local server readiness & loading Piper neural models...</p>
-            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-4">
-                <div id="setup-progress" class="bg-[var(--accent)] h-full w-1/3 animate-pulse transition-all duration-300"></div>
+            <div class="skeleton-title">Starting Voice Studio</div>
+            <div class="skeleton-bar-container">
+                <div class="skeleton-bar"></div>
             </div>
-            <div class="text-xs text-slate-500">Preparing local environment (~/.piper_voices)</div>
         </div>
     </div>
 
-    <div class="w-full max-w-4xl bg-[var(--card)] shadow-2xl rounded-2xl p-8 border border-slate-800 mt-6">
-        <header class="mb-8 border-b border-slate-700/60 pb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-                <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-                    <span class="p-2 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30 text-xl">🎙️</span>
-                    Offline Book TTS Reader
-                </h1>
-                <p class="text-slate-400 mt-1">High-quality neural text-to-speech for long book readings, 100% offline.</p>
+    <!-- Application Top Header -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand-section">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="22"></line>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>Piper Studio</h1>
+                </div>
             </div>
-            <div id="status-badge" class="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Ready
-            </div>
-        </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                <label for="voice-select" class="block text-sm font-semibold text-slate-300 mb-2">Voice / Accent (22.05 kHz High Quality)</label>
-                <div class="flex gap-2">
-                    <select id="voice-select" class="flex-1 rounded-xl border border-slate-700 py-3 px-4 bg-[var(--bg)] text-slate-100 shadow-inner focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none">
-                        {% for key, voice in voices.items() %}
-                        <option value="{{ key }}">{{ voice.name }}</option>
-                        {% endfor %}
+            <!-- Tab Navigation Buttons -->
+            <nav class="tabs-nav" aria-label="Main Navigation">
+                <button class="tab-btn active" data-tab="tab-dashboard" id="nav-dashboard">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    Studio
+                </button>
+                <button class="tab-btn" data-tab="tab-history" id="nav-history">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    History
+                </button>
+                <button class="tab-btn" data-tab="tab-collections" id="nav-collections">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                    </svg>
+                    Projects
+                </button>
+            </nav>
+
+            <div class="status-badge" id="backend-status-badge">
+                <span class="status-dot pulsing"></span>
+                <span id="backend-status-text">Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-content">
+        <!-- ===================================================================
+             TAB 1: Dashboard (Generation Studio)
+             =================================================================== -->
+        <section id="tab-dashboard" class="tab-pane active">
+            <div class="studio-grid">
+                <!-- Left Column: Input Textarea & Title -->
+                <div class="card">
+                    <div class="card-title-bar">
+                        <h2>Text Content</h2>
+                    </div>
+
+                    <input type="text" id="input-title" class="input-field" placeholder="Title (optional)">
+
+                    <div class="textarea-container">
+                        <textarea id="input-text" class="textarea-field" placeholder="Type or paste text to convert to speech..."></textarea>
+                        <div class="textarea-footer">
+                            <span class="counts-display" id="text-counters">0 words • 0 characters</span>
+                            <button class="btn-link" id="btn-clear-text">Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Progress Status & Error Boxes -->
+                    <div id="progress-box" class="progress-box">
+                        <div class="progress-header">
+                            <span class="progress-status" id="progress-status-text">Synthesizing audio...</span>
+                            <span id="progress-percentage">Please wait</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div id="progress-bar-fill" class="progress-bar-fill indeterminate"></div>
+                        </div>
+                    </div>
+
+                    <div id="alert-error" class="alert-error">
+                        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <span id="error-message-text">An error occurred</span>
+                    </div>
+                </div>
+
+                <!-- Right Column: Voice Selection & Generation Parameters -->
+                <div class="card">
+                    <div class="card-title-bar">
+                        <h2>Voice Settings</h2>
+                    </div>
+
+                    <!-- Voice Model Selector -->
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Voice</span>
+                            <span id="voice-cached-indicator" class="meta-pill">Ready</span>
+                        </div>
+                        <div class="voice-select-row">
+                            <select id="voice-selector" class="select-field">
+                                <option value="en_US-lessac-high">US Female (Lessac)</option>
+                                <option value="en_US-amy-medium">US Female (Amy)</option>
+                                <option value="en_US-danny-low">US Male (Danny)</option>
+                                <option value="en_US-ryan-high">US Male (Ryan)</option>
+                                <option value="en_GB-alan-medium">UK Male (Alan)</option>
+                                <option value="en_GB-southern_english_female-low">UK Female (Southern English)</option>
+                            </select>
+                            <button class="btn btn-secondary" id="btn-preview-voice" title="Preview voice sample">
+                                <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                Preview
+                            </button>
+                        </div>
+                        <div class="voice-badge-info" id="voice-details-text">
+                            Natural quality
+                        </div>
+                    </div>
+
+                    <!-- Speaking Speed Slider -->
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Speed</span>
+                            <span class="control-val" id="val-speed">1.0x</span>
+                        </div>
+                        <input type="range" id="slider-speed" class="range-slider" min="0.5" max="2.0" step="0.05" value="1.0">
+                        <div class="textarea-footer" style="margin-top: 4px;">
+                            <span>0.5x</span>
+                            <span>1.0x</span>
+                            <span>2.0x</span>
+                        </div>
+                    </div>
+
+                    <!-- Sentence Pause Slider -->
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Pause Duration</span>
+                            <span class="control-val" id="val-pause">0.20s</span>
+                        </div>
+                        <input type="range" id="slider-pause" class="range-slider" min="0.0" max="1.5" step="0.05" value="0.2">
+                        <div class="textarea-footer" style="margin-top: 4px;">
+                            <span>Short</span>
+                            <span>Standard</span>
+                            <span>Long</span>
+                        </div>
+                    </div>
+
+                    <!-- Generate Action Button -->
+                    <div style="margin-top: 28px;">
+                        <button class="btn btn-primary btn-block" id="btn-synthesize">
+                            <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Generate Audio
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             TAB 2: History (Preset Engine & Logs)
+             =================================================================== -->
+        <section id="tab-history" class="tab-pane">
+            <div class="card">
+                <div class="card-title-bar">
+                    <h2>History</h2>
+                    <button class="btn btn-secondary btn-sm" id="btn-refresh-history">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="history-container" class="history-list">
+                    <!-- Populated dynamically via app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             TAB 3: Collection (Book & Project Organizer)
+             =================================================================== -->
+        <section id="tab-collections" class="tab-pane">
+            <div class="collections-header">
+                <div>
+                    <h2 style="font-size: 1.15rem; font-weight: 600;">Projects</h2>
+                </div>
+                <button class="btn btn-primary" id="btn-new-collection">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Project
+                </button>
+            </div>
+
+            <div id="collections-container" class="collections-grid">
+                <!-- Populated dynamically via app.js -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Discrete Privacy & Offline Footer -->
+    <footer style="max-width: 1200px; margin: 0 auto; width: 100%; padding: 0 20px 80px 20px; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-dim);">
+        <span>Local Device Storage</span>
+        <button id="btn-open-privacy" class="btn-link" style="color: var(--text-dim); text-decoration: none;">Privacy &amp; Data Policy</button>
+    </footer>
+
+    <!-- =======================================================================
+         Persistent Bottom Audio Bar
+         ======================================================================= -->
+    <div id="audio-player-bar" class="audio-player-bar">
+        <div class="player-inner">
+            <div class="player-info">
+                <div class="player-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                </div>
+                <div class="player-text">
+                    <h4 id="player-title">Audio Player</h4>
+                    <p id="player-subtext">Ready</p>
+                </div>
+            </div>
+
+            <div class="player-controls">
+                <audio id="global-audio-element" controls preload="auto"></audio>
+            </div>
+
+            <div class="player-actions">
+                <a id="btn-download-audio" class="btn btn-secondary btn-sm" href="#" download="audio.wav">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download WAV
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- =======================================================================
+         Modal: Privacy Policy
+         ======================================================================= -->
+    <div id="modal-privacy" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Privacy &amp; Data Notice</h3>
+                <button class="modal-close-btn" id="btn-close-privacy">&times;</button>
+            </div>
+            <div class="modal-body" style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.6;">
+                <p style="margin-bottom: 12px;">
+                    <strong>Local Processing:</strong> All speech synthesis and audio rendering occur completely offline on your device using local neural models.
+                </p>
+                <p style="margin-bottom: 12px;">
+                    <strong>Zero Telemetry:</strong> No text input, audio output, or usage telemetry is transmitted to external servers.
+                </p>
+                <p>
+                    <strong>Storage:</strong> All database logs and voice files are maintained exclusively in your local user directory.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-dismiss-privacy">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: Add Track to Collection -->
+    <div id="modal-add-to-collection" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add to Project</h3>
+                <button class="modal-close-btn" id="btn-close-add-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modal-track-id">
+                <div class="control-group">
+                    <label class="control-label">Project</label>
+                    <select id="modal-select-collection" class="select-field">
+                        <!-- Populated dynamically -->
                     </select>
-                    <button id="preview-btn" class="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl border border-slate-600 transition-colors cursor-pointer text-sm whitespace-nowrap">
-                        Sample Preview
-                    </button>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Chapter Title</label>
+                    <input type="text" id="modal-chapter-title" class="input-field" placeholder="e.g. Chapter 1">
                 </div>
             </div>
-
-            <div>
-                <label for="speed-select" class="block text-sm font-semibold text-slate-300 mb-2">Speaking Speed (<span id="speed-val">1.0</span>x)</label>
-                <input type="range" id="speed-select" min="0.5" max="1.5" step="0.05" value="1.0" class="w-full accent-[var(--accent)] bg-slate-700 rounded-lg h-2 cursor-pointer mt-3">
-                <div class="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>0.5x (Slower)</span>
-                    <span>1.0x (Normal)</span>
-                    <span>1.5x (Faster)</span>
-                </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-add-modal">Cancel</button>
+                <button class="btn btn-primary" id="btn-confirm-add-track">Add</button>
             </div>
-        </div>
-
-        <div class="mb-6">
-            <div class="flex items-center justify-between mb-2">
-                <label for="book-text" class="block text-sm font-semibold text-slate-300">Book Chapter / Text Content</label>
-                <div class="flex items-center gap-3">
-                    <span id="word-count" class="text-xs text-slate-400 font-medium">0 words (0 chars)</span>
-                    <button id="clear-btn" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium transition-colors cursor-pointer">
-                        Clear Text
-                    </button>
-                </div>
-            </div>
-            <textarea id="book-text" rows="12" class="w-full rounded-xl border border-slate-700 p-4 font-sans text-slate-100 bg-[var(--bg)] shadow-inner focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none placeholder-slate-500 leading-relaxed" placeholder="Paste your long book chapter or text here..."></textarea>
-        </div>
-
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[var(--bg)]/50 p-4 rounded-xl border border-slate-800">
-            <button id="convert-btn" class="w-full sm:w-auto px-8 py-3.5 bg-[var(--accent)] hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
-                <span>⚡</span> Convert to Full Audio
-            </button>
-            <div id="status-indicator" class="text-sm font-medium text-slate-400">Ready for generation</div>
-        </div>
-
-        <div id="audio-container" class="mt-8 hidden border-t border-slate-700/60 pt-6">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-lg font-semibold text-white">Generated Audio Player</h2>
-                <a id="download-link" href="#" download="book_audio.wav" class="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium">Download WAV file</a>
-            </div>
-            <audio id="audio-player" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
-                Your browser does not support the audio element.
-            </audio>
-        </div>
-
-        <!-- Error Container -->
-        <div id="error-container" class="mt-4 hidden p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
-            <span class="font-bold">Error:</span> <span id="error-message"></span>
         </div>
     </div>
 
-    <script>
-        // Setup sequence simulation / readiness check
-        window.addEventListener('DOMContentLoaded', () => {
-            const skeleton = document.getElementById('setup-skeleton');
-            const progress = document.getElementById('setup-progress');
-            const statusText = document.getElementById('setup-status-text');
+    <!-- Modal 2: Create New Collection -->
+    <div id="modal-new-collection" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>New Project</h3>
+                <button class="modal-close-btn" id="btn-close-new-col-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="control-group">
+                    <label class="control-label">Project Name</label>
+                    <input type="text" id="modal-new-col-name" class="input-field" placeholder="e.g. My Audiobook">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Description</label>
+                    <input type="text" id="modal-new-col-desc" class="input-field" placeholder="Optional notes">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-new-col-modal">Cancel</button>
+                <button class="btn btn-primary" id="btn-confirm-create-collection">Create</button>
+            </div>
+        </div>
+    </div>
 
-            setTimeout(() => {
-                progress.style.width = '70%';
-                statusText.textContent = 'Verifying local piper binary & voice directories...';
-            }, 500);
-
-            setTimeout(() => {
-                progress.style.width = '100%';
-                statusText.textContent = 'Ready!';
-            }, 1000);
-
-            setTimeout(() => {
-                skeleton.style.opacity = '0';
-                setTimeout(() => skeleton.remove(), 400);
-            }, 1300);
-        });
-
-        const convertBtn = document.getElementById('convert-btn');
-        const previewBtn = document.getElementById('preview-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        const statusIndicator = document.getElementById('status-indicator');
-        const statusBadge = document.getElementById('status-badge');
-        const bookText = document.getElementById('book-text');
-        const wordCount = document.getElementById('word-count');
-        const voiceSelect = document.getElementById('voice-select');
-        const speedSelect = document.getElementById('speed-select');
-        const speedVal = document.getElementById('speed-val');
-        const audioContainer = document.getElementById('audio-container');
-        const audioPlayer = document.getElementById('audio-player');
-        const downloadLink = document.getElementById('download-link');
-        const errorContainer = document.getElementById('error-container');
-        const errorMessage = document.getElementById('error-message');
-
-        function showError(msg) {
-            errorMessage.textContent = msg;
-            errorContainer.classList.remove('hidden');
-        }
-
-        function hideError() {
-            errorContainer.classList.add('hidden');
-        }
-
-        function updateWordCount() {
-            const text = bookText.value.trim();
-            const words = text ? text.split(/\s+/).length : 0;
-            const chars = text.length;
-            wordCount.textContent = `${words} words (${chars} chars)`;
-        }
-
-        bookText.addEventListener('input', updateWordCount);
-
-        clearBtn.addEventListener('click', () => {
-            bookText.value = '';
-            updateWordCount();
-            bookText.focus();
-            hideError();
-        });
-
-        speedSelect.addEventListener('input', () => {
-            speedVal.textContent = parseFloat(speedSelect.value).toFixed(2);
-        });
-
-        previewBtn.addEventListener('click', async () => {
-            previewBtn.disabled = true;
-            hideError();
-            statusIndicator.textContent = 'Downloading model & generating sample preview...';
-            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Previewing...';
-            statusBadge.className = 'px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium flex items-center gap-2';
-
-            try {
-                const response = await fetch(`/preview?voice=${encodeURIComponent(voiceSelect.value)}`);
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const audioUrl = URL.createObjectURL(blob);
-                    
-                    statusIndicator.textContent = 'Preview ready!';
-                    statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Ready';
-                    statusBadge.className = 'px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2';
-                    
-                    audioContainer.classList.remove('hidden');
-                    audioPlayer.src = audioUrl;
-                    audioPlayer.play();
-                    downloadLink.href = audioUrl;
-                } else {
-                    const result = await response.json();
-                    throw new Error(result.error || 'Failed to generate preview.');
-                }
-            } catch (err) {
-                statusIndicator.textContent = 'Preview failed.';
-                statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error';
-                statusBadge.className = 'px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium flex items-center gap-2';
-                showError(err.message);
-            } finally {
-                previewBtn.disabled = false;
-            }
-        });
-
-        convertBtn.addEventListener('click', async () => {
-            const text = bookText.value.trim();
-            if (!text) {
-                showError('Please enter some text to synthesize.');
-                return;
-            }
-
-            convertBtn.disabled = true;
-            hideError();
-            statusIndicator.textContent = 'Downloading voice model / Synthesizing full audio (this may take a moment)...';
-            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Synthesizing...';
-            statusBadge.className = 'px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium flex items-center gap-2';
-
-            try {
-                const response = await fetch('/synthesize', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text: text,
-                        voice: voiceSelect.value,
-                        speed: parseFloat(speedSelect.value)
-                    })
-                });
-
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const audioUrl = URL.createObjectURL(blob);
-
-                    statusIndicator.textContent = 'Synthesis complete!';
-                    statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Ready';
-                    statusBadge.className = 'px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2';
-                    
-                    audioContainer.classList.remove('hidden');
-                    audioPlayer.src = audioUrl;
-                    audioPlayer.play();
-                    downloadLink.href = audioUrl;
-                } else {
-                    const result = await response.json();
-                    throw new Error(result.error || 'Failed to synthesize audio.');
-                }
-            } catch (err) {
-                statusIndicator.textContent = 'Synthesis error.';
-                statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error';
-                statusBadge.className = 'px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium flex items-center gap-2';
-                showError(err.message);
-            } finally {
-                convertBtn.disabled = false;
-            }
-        });
-    </script>
+    <!-- Application Script -->
+    <script src="/static/app.js"></script>
 </body>
 </html>

@@ -1,11 +1,12 @@
-name: Build Windows Executable
+name: Build Windows Desktop Executable
 
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -17,23 +18,34 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install Dependencies
+    - name: Install Build Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install flask pyinstaller
 
-    - name: Download and Extract Piper Binaries
+    - name: Download and Extract Piper Windows Binaries
       run: |
         curl -L -o piper.zip "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
         Expand-Archive -Path piper.zip -DestinationPath . -Force
         Remove-Item piper.zip
 
-    - name: Package with PyInstaller
+    - name: Package Desktop App with PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --windowed --add-data "templates;templates" --add-data "piper;piper" --hidden-import=flask --collect-all=flask --name "TTS_App" app.py
+        pyinstaller --noconfirm --onedir --windowed `
+          --add-data "templates;templates" `
+          --add-data "static;static" `
+          --add-data "piper;piper" `
+          --hidden-import=flask `
+          --collect-all=flask `
+          --name "Piper_TTS_Studio" `
+          app.py
 
-    - name: Upload Artifact
+    - name: Compress Build Output into ZIP Package
+      run: |
+        Compress-Archive -Path "dist/Piper_TTS_Studio/*" -DestinationPath "dist/Piper_TTS_Studio_Windows.zip" -Force
+
+    - name: Upload Standalone Release Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: TTS_App_Windows
-        path: dist/TTS_App
+        name: Piper_TTS_Studio_Windows_x64
+        path: dist/Piper_TTS_Studio_Windows.zip
