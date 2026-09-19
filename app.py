@@ -17,28 +17,28 @@ def get_resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-# Dictionary of available Piper voices with names, onnx model filenames, and Hugging Face URLs
+# Dictionary of available High-Quality Piper voices (22.05 kHz)
 VOICES = {
-    "en_US-lessac-medium": {
-        "name": "US Female (Lessac)",
-        "onnx": "en_US-lessac-medium.onnx",
-        "json": "en_US-lessac-medium.onnx.json",
-        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+    "en_US-lessac-high": {
+        "name": "US Female (Lessac - High Quality)",
+        "onnx": "en_US-lessac-high.onnx",
+        "json": "en_US-lessac-high.onnx.json",
+        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx",
+        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx.json"
     },
-    "en_US-ryan-medium": {
-        "name": "US Male (Ryan)",
-        "onnx": "en_US-ryan-medium.onnx",
-        "json": "en_US-ryan-medium.onnx.json",
-        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx",
-        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json"
+    "en_US-ryan-high": {
+        "name": "US Male (Ryan - High Quality)",
+        "onnx": "en_US-ryan-high.onnx",
+        "json": "en_US-ryan-high.onnx.json",
+        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx",
+        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json"
     },
-    "en_GB-alan-medium": {
-        "name": "UK Male (Alan)",
-        "onnx": "en_GB-alan-medium.onnx",
-        "json": "en_GB-alan-medium.onnx.json",
-        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
-        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json"
+    "en_GB-alan-high": {
+        "name": "UK Male (Alan - High Quality)",
+        "onnx": "en_GB-alan-high.onnx",
+        "json": "en_GB-alan-high.onnx.json",
+        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/high/en_GB-alan-high.onnx",
+        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/high/en_GB-alan-high.onnx.json"
     }
 }
 
@@ -72,11 +72,16 @@ def index():
 def synthesize():
     data = request.json or {}
     text = data.get("text", "").strip()
-    voice_key = data.get("voice", "en_US-lessac-medium")
+    voice_key = data.get("voice", "en_US-lessac-high")
     try:
         speed = float(data.get("speed", 1.0))
     except ValueError:
         speed = 1.0
+        
+    try:
+        pause_silence = float(data.get("pauseSilence", 0.2))
+    except ValueError:
+        pause_silence = 0.2
         
     if not text:
         return jsonify({"error": "No text provided"}), 400
@@ -98,7 +103,8 @@ def synthesize():
         piper_exe,
         "--model", model_path,
         "--output_file", output_wav,
-        "--length_scale", str(length_scale)
+        "--length_scale", str(length_scale),
+        "--sentence_silence", str(pause_silence)
     ]
     
     try:
@@ -118,12 +124,57 @@ def synthesize():
         
     return jsonify({"success": True, "audio_url": "/get-audio"})
 
+@app.route("/preview", methods=["POST"])
+def preview():
+    data = request.json or {}
+    voice_key = data.get("voice", "en_US-lessac-high")
+    preview_text = "Hello! This is a high quality voice preview for your offline book reader."
+    
+    try:
+        model_path = ensure_voice_downloaded(voice_key)
+    except Exception as e:
+        return jsonify({"error": f"Failed to download voice model: {str(e)}"}), 500
+        
+    piper_exe = get_resource_path(os.path.join("piper", "piper.exe" if os.name == "nt" else "piper"))
+    if not os.path.exists(piper_exe):
+        piper_exe = "piper"
+        
+    preview_wav = os.path.join(os.path.abspath("."), "preview.wav")
+    
+    cmd = [
+        piper_exe,
+        "--model", model_path,
+        "--output_file", preview_wav
+    ]
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8"
+        )
+        process.communicate(input=preview_text)
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate preview: {str(e)}"}), 500
+        
+    return jsonify({"success": True, "audio_url": "/get-preview-audio"})
+
 @app.route("/get-audio")
 def get_audio():
     output_wav = os.path.join(os.path.abspath("."), "output.wav")
     if os.path.exists(output_wav):
         return send_file(output_wav, mimetype="audio/wav")
     return jsonify({"error": "Audio not found"}), 404
+
+@app.route("/get-preview-audio")
+def get_preview_audio():
+    preview_wav = os.path.join(os.path.abspath("."), "preview.wav")
+    if os.path.exists(preview_wav):
+        return send_file(preview_wav, mimetype="audio/wav")
+    return jsonify({"error": "Preview audio not found"}), 404
 
 if __name__ == "__main__":
     def open_browser():
