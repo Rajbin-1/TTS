@@ -25,7 +25,7 @@ jobs:
     - name: Download and Extract Piper Binaries
       run: |
         curl -L -o piper.zip "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
-        Expand-Archive -Path piper.zip -DestinationPath .
+        Expand-Archive -Path piper.zip -DestinationPath . -Force
         Remove-Item piper.zip
 
     - name: Package with PyInstaller
