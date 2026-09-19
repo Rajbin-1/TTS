@@ -7,15 +7,19 @@ import threading
 import webbrowser
 from flask import Flask, render_template, request, jsonify, send_file
 
-app = Flask(__name__)
-
 def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
         base_path = sys._MEIPASS
     except Exception:
-        base_path = os.path.abspath(".")
+        base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
+
+app = Flask(
+    __name__,
+    template_folder=get_resource_path('templates'),
+    static_folder=get_resource_path('static')
+)
 
 # Dictionary of available High-Quality Piper voices (22.05 kHz)
 VOICES = {
@@ -26,12 +30,12 @@ VOICES = {
         "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx",
         "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx.json"
     },
-    "en_US-ryan-high": {
-        "name": "US Male (Ryan - High Quality)",
-        "onnx": "en_US-ryan-high.onnx",
-        "json": "en_US-ryan-high.onnx.json",
-        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx",
-        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json"
+    "en_US-amy-medium": {
+        "name": "US Female (Amy - Medium Quality)",
+        "onnx": "en_US-amy-medium.onnx",
+        "json": "en_US-amy-medium.onnx.json",
+        "url_onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
+        "url_json": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json"
     },
     "en_GB-alan-high": {
         "name": "UK Male (Alan - High Quality)",
@@ -43,6 +47,7 @@ VOICES = {
 }
 
 VOICES_DIR = os.path.expanduser("~/.piper_voices")
+CACHE_DIR = os.path.expanduser("~/.app_cache")
 
 def ensure_voice_downloaded(voice_key):
     if voice_key not in VOICES:
@@ -64,82 +69,34 @@ def ensure_voice_downloaded(voice_key):
         
     return onnx_path
 
+def get_piper_executable():
+    candidates = [
+        get_resource_path(os.path.join("piper", "piper.exe" if os.name == "nt" else "piper")),
+        get_resource_path("piper.exe" if os.name == "nt" else "piper"),
+        "piper.exe" if os.name == "nt" else "piper"
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return "piper"
+
 @app.route("/")
 def index():
     return render_template("index.html", voices=VOICES)
 
-@app.route("/synthesize", methods=["POST"])
-def synthesize():
-    data = request.json or {}
-    text = data.get("text", "").strip()
-    voice_key = data.get("voice", "en_US-lessac-high")
-    try:
-        speed = float(data.get("speed", 1.0))
-    except ValueError:
-        speed = 1.0
-        
-    try:
-        pause_silence = float(data.get("pauseSilence", 0.2))
-    except ValueError:
-        pause_silence = 0.2
-        
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
-        
-    try:
-        model_path = ensure_voice_downloaded(voice_key)
-    except Exception as e:
-        return jsonify({"error": f"Failed to download voice model: {str(e)}"}), 500
-        
-    length_scale = 1.0 / speed if speed > 0 else 1.0
-    
-    piper_exe = get_resource_path(os.path.join("piper", "piper.exe" if os.name == "nt" else "piper"))
-    if not os.path.exists(piper_exe):
-        piper_exe = "piper"
-        
-    output_wav = os.path.join(os.path.abspath("."), "output.wav")
-    
-    cmd = [
-        piper_exe,
-        "--model", model_path,
-        "--output_file", output_wav,
-        "--length_scale", str(length_scale),
-        "--sentence_silence", str(pause_silence)
-    ]
-    
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8"
-        )
-        stdout, stderr = process.communicate(input=text)
-        if process.returncode != 0:
-            return jsonify({"error": f"Piper synthesis failed: {stderr}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Failed to execute Piper: {str(e)}"}), 500
-        
-    return jsonify({"success": True, "audio_url": "/get-audio"})
-
-@app.route("/preview", methods=["POST"])
+@app.route("/preview", methods=["GET", "POST"])
 def preview():
-    data = request.json or {}
-    voice_key = data.get("voice", "en_US-lessac-high")
-    preview_text = "Hello! This is a high quality voice preview for your offline book reader."
+    voice_key = request.args.get("voice") or (request.json.get("voice") if request.is_json else None) or "en_US-lessac-high"
+    preview_text = "Hello! This is a preview of this voice model."
     
     try:
         model_path = ensure_voice_downloaded(voice_key)
     except Exception as e:
         return jsonify({"error": f"Failed to download voice model: {str(e)}"}), 500
         
-    piper_exe = get_resource_path(os.path.join("piper", "piper.exe" if os.name == "nt" else "piper"))
-    if not os.path.exists(piper_exe):
-        piper_exe = "piper"
-        
-    preview_wav = os.path.join(os.path.abspath("."), "preview.wav")
+    piper_exe = get_piper_executable()
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    preview_wav = os.path.join(CACHE_DIR, "preview.wav")
     
     cmd = [
         piper_exe,
@@ -156,25 +113,74 @@ def preview():
             text=True,
             encoding="utf-8"
         )
-        process.communicate(input=preview_text)
+        stdout, stderr = process.communicate(input=preview_text, timeout=30)
+        if process.returncode != 0:
+            return jsonify({"error": f"Piper preview failed: {stderr}"}), 500
+    except subprocess.TimeoutExpired:
+        process.kill()
+        return jsonify({"error": "Piper preview timed out."}), 500
     except Exception as e:
-        return jsonify({"error": f"Failed to generate preview: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to execute Piper: {str(e)}"}), 500
         
-    return jsonify({"success": True, "audio_url": "/get-preview-audio"})
+    return send_file(preview_wav, mimetype="audio/wav")
+
+@app.route("/synthesize", methods=["POST"])
+def synthesize():
+    data = request.json or {}
+    text = data.get("text", "").strip()
+    voice_key = data.get("voice", "en_US-lessac-high")
+    try:
+        speed = float(data.get("speed", 1.0))
+    except ValueError:
+        speed = 1.0
+        
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+        
+    try:
+        model_path = ensure_voice_downloaded(voice_key)
+    except Exception as e:
+        return jsonify({"error": f"Failed to download voice model: {str(e)}"}), 500
+        
+    length_scale = 1.0 / speed if speed > 0 else 1.0
+    
+    piper_exe = get_piper_executable()
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    output_wav = os.path.join(CACHE_DIR, "output.wav")
+    
+    cmd = [
+        piper_exe,
+        "--model", model_path,
+        "--output_file", output_wav,
+        "--length_scale", str(length_scale)
+    ]
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8"
+        )
+        stdout, stderr = process.communicate(input=text, timeout=120)
+        if process.returncode != 0:
+            return jsonify({"error": f"Piper synthesis failed: {stderr}"}), 500
+    except subprocess.TimeoutExpired:
+        process.kill()
+        return jsonify({"error": "Piper synthesis timed out."}), 500
+    except Exception as e:
+        return jsonify({"error": f"Failed to execute Piper: {str(e)}"}), 500
+        
+    return send_file(output_wav, mimetype="audio/wav")
 
 @app.route("/get-audio")
 def get_audio():
-    output_wav = os.path.join(os.path.abspath("."), "output.wav")
+    output_wav = os.path.join(CACHE_DIR, "output.wav")
     if os.path.exists(output_wav):
         return send_file(output_wav, mimetype="audio/wav")
     return jsonify({"error": "Audio not found"}), 404
-
-@app.route("/get-preview-audio")
-def get_preview_audio():
-    preview_wav = os.path.join(os.path.abspath("."), "preview.wav")
-    if os.path.exists(preview_wav):
-        return send_file(preview_wav, mimetype="audio/wav")
-    return jsonify({"error": "Preview audio not found"}), 404
 
 if __name__ == "__main__":
     def open_browser():

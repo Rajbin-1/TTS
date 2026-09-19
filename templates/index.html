@@ -5,24 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Offline Book TTS Reader</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #6366f1;
+        }
+    </style>
 </head>
-<body class="bg-[#0f172a] text-slate-100 min-h-screen flex flex-col items-center justify-start p-6 font-sans">
+<body class="bg-[var(--bg)] text-slate-100 min-h-screen flex flex-col items-center justify-start p-6 font-sans">
     <!-- Setup Skeleton Overlay -->
-    <div id="setup-skeleton" class="fixed inset-0 z-50 bg-[#0f172a] flex flex-col items-center justify-center p-6 transition-opacity duration-500">
-        <div class="w-full max-w-md bg-[#1e293b] border border-slate-800 rounded-2xl p-8 shadow-2xl flex flex-col items-center text-center">
+    <div id="setup-skeleton" class="fixed inset-0 z-50 bg-[var(--bg)] flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+        <div class="w-full max-w-md bg-[var(--card)] border border-slate-800 rounded-2xl p-8 shadow-2xl flex flex-col items-center text-center">
             <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-3xl mb-4 animate-bounce">
                 🎙️
             </div>
             <h2 class="text-xl font-bold text-white mb-2">Initializing Offline TTS Engine...</h2>
             <p id="setup-status-text" class="text-sm text-slate-400 mb-6">Checking local server readiness & loading Piper neural models...</p>
             <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-4">
-                <div id="setup-progress" class="bg-indigo-500 h-full w-1/3 animate-pulse transition-all duration-300"></div>
+                <div id="setup-progress" class="bg-[var(--accent)] h-full w-1/3 animate-pulse transition-all duration-300"></div>
             </div>
             <div class="text-xs text-slate-500">Preparing local environment (~/.piper_voices)</div>
         </div>
     </div>
 
-    <div class="w-full max-w-4xl bg-[#1e293b] shadow-2xl rounded-2xl p-8 border border-slate-800 mt-6">
+    <div class="w-full max-w-4xl bg-[var(--card)] shadow-2xl rounded-2xl p-8 border border-slate-800 mt-6">
         <header class="mb-8 border-b border-slate-700/60 pb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
@@ -41,25 +48,24 @@
             <div>
                 <label for="voice-select" class="block text-sm font-semibold text-slate-300 mb-2">Voice / Accent (22.05 kHz High Quality)</label>
                 <div class="flex gap-2">
-                    <select id="voice-select" class="flex-1 rounded-xl border border-slate-700 py-3 px-4 bg-[#0f172a] text-slate-100 shadow-inner focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                    <select id="voice-select" class="flex-1 rounded-xl border border-slate-700 py-3 px-4 bg-[var(--bg)] text-slate-100 shadow-inner focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none">
                         {% for key, voice in voices.items() %}
                         <option value="{{ key }}">{{ voice.name }}</option>
                         {% endfor %}
                     </select>
-                    <button id="preview-btn" class="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl border border-slate-600 transition-colors cursor-pointer text-sm">
-                        Preview
+                    <button id="preview-btn" class="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-xl border border-slate-600 transition-colors cursor-pointer text-sm whitespace-nowrap">
+                        Sample Preview
                     </button>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label for="speed-select" class="block text-sm font-semibold text-slate-300 mb-2">Speed (<span id="speed-val">1.0</span>x)</label>
-                    <input type="range" id="speed-select" min="0.5" max="2.0" step="0.05" value="1.0" class="w-full accent-indigo-500 bg-slate-700 rounded-lg h-2 cursor-pointer mt-3">
-                </div>
-                <div>
-                    <label for="pause-select" class="block text-sm font-semibold text-slate-300 mb-2">Pause (<span id="pause-val">0.2</span>s)</label>
-                    <input type="range" id="pause-select" min="0.0" max="1.0" step="0.05" value="0.2" class="w-full accent-indigo-500 bg-slate-700 rounded-lg h-2 cursor-pointer mt-3">
+            <div>
+                <label for="speed-select" class="block text-sm font-semibold text-slate-300 mb-2">Speaking Speed (<span id="speed-val">1.0</span>x)</label>
+                <input type="range" id="speed-select" min="0.5" max="1.5" step="0.05" value="1.0" class="w-full accent-[var(--accent)] bg-slate-700 rounded-lg h-2 cursor-pointer mt-3">
+                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>0.5x (Slower)</span>
+                    <span>1.0x (Normal)</span>
+                    <span>1.5x (Faster)</span>
                 </div>
             </div>
         </div>
@@ -74,11 +80,11 @@
                     </button>
                 </div>
             </div>
-            <textarea id="book-text" rows="12" class="w-full rounded-xl border border-slate-700 p-4 font-sans text-slate-100 bg-[#0f172a] shadow-inner focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-slate-500 leading-relaxed" placeholder="Paste your long book chapter or text here..."></textarea>
+            <textarea id="book-text" rows="12" class="w-full rounded-xl border border-slate-700 p-4 font-sans text-slate-100 bg-[var(--bg)] shadow-inner focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none placeholder-slate-500 leading-relaxed" placeholder="Paste your long book chapter or text here..."></textarea>
         </div>
 
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0f172a]/50 p-4 rounded-xl border border-slate-800">
-            <button id="convert-btn" class="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[var(--bg)]/50 p-4 rounded-xl border border-slate-800">
+            <button id="convert-btn" class="w-full sm:w-auto px-8 py-3.5 bg-[var(--accent)] hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
                 <span>⚡</span> Convert to Full Audio
             </button>
             <div id="status-indicator" class="text-sm font-medium text-slate-400">Ready for generation</div>
@@ -93,6 +99,11 @@
                 Your browser does not support the audio element.
             </audio>
         </div>
+
+        <!-- Error Container -->
+        <div id="error-container" class="mt-4 hidden p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
+            <span class="font-bold">Error:</span> <span id="error-message"></span>
+        </div>
     </div>
 
     <script>
@@ -105,17 +116,17 @@
             setTimeout(() => {
                 progress.style.width = '70%';
                 statusText.textContent = 'Verifying local piper binary & voice directories...';
-            }, 600);
+            }, 500);
 
             setTimeout(() => {
                 progress.style.width = '100%';
                 statusText.textContent = 'Ready!';
-            }, 1200);
+            }, 1000);
 
             setTimeout(() => {
                 skeleton.style.opacity = '0';
-                setTimeout(() => skeleton.remove(), 500);
-            }, 1500);
+                setTimeout(() => skeleton.remove(), 400);
+            }, 1300);
         });
 
         const convertBtn = document.getElementById('convert-btn');
@@ -128,11 +139,20 @@
         const voiceSelect = document.getElementById('voice-select');
         const speedSelect = document.getElementById('speed-select');
         const speedVal = document.getElementById('speed-val');
-        const pauseSelect = document.getElementById('pause-select');
-        const pauseVal = document.getElementById('pause-val');
         const audioContainer = document.getElementById('audio-container');
         const audioPlayer = document.getElementById('audio-player');
         const downloadLink = document.getElementById('download-link');
+        const errorContainer = document.getElementById('error-container');
+        const errorMessage = document.getElementById('error-message');
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorContainer.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorContainer.classList.add('hidden');
+        }
 
         function updateWordCount() {
             const text = bookText.value.trim();
@@ -147,46 +167,44 @@
             bookText.value = '';
             updateWordCount();
             bookText.focus();
+            hideError();
         });
 
         speedSelect.addEventListener('input', () => {
             speedVal.textContent = parseFloat(speedSelect.value).toFixed(2);
         });
 
-        pauseSelect.addEventListener('input', () => {
-            pauseVal.textContent = parseFloat(pauseSelect.value).toFixed(2);
-        });
-
         previewBtn.addEventListener('click', async () => {
             previewBtn.disabled = true;
-            statusIndicator.textContent = 'Downloading model & generating voice preview...';
-            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Downloading / Generating...';
+            hideError();
+            statusIndicator.textContent = 'Downloading model & generating sample preview...';
+            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Previewing...';
             statusBadge.className = 'px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium flex items-center gap-2';
 
             try {
-                const response = await fetch('/preview', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voice: voiceSelect.value })
-                });
-
-                const result = await response.json();
-                if (response.ok && result.success) {
+                const response = await fetch(`/preview?voice=${encodeURIComponent(voiceSelect.value)}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+                    
                     statusIndicator.textContent = 'Preview ready!';
                     statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Ready';
                     statusBadge.className = 'px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2';
                     
                     audioContainer.classList.remove('hidden');
-                    audioPlayer.src = `${result.audio_url}?t=${new Date().getTime()}`;
+                    audioPlayer.src = audioUrl;
                     audioPlayer.play();
-                    downloadLink.href = result.audio_url;
+                    downloadLink.href = audioUrl;
                 } else {
-                    statusIndicator.textContent = 'Preview failed.';
-                    alert(result.error || 'Failed to generate preview.');
+                    const result = await response.json();
+                    throw new Error(result.error || 'Failed to generate preview.');
                 }
             } catch (err) {
-                statusIndicator.textContent = 'Network error.';
-                alert('An error occurred: ' + err.message);
+                statusIndicator.textContent = 'Preview failed.';
+                statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error';
+                statusBadge.className = 'px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium flex items-center gap-2';
+                showError(err.message);
             } finally {
                 previewBtn.disabled = false;
             }
@@ -195,12 +213,13 @@
         convertBtn.addEventListener('click', async () => {
             const text = bookText.value.trim();
             if (!text) {
-                alert('Please enter some text to synthesize.');
+                showError('Please enter some text to synthesize.');
                 return;
             }
 
             convertBtn.disabled = true;
-            statusIndicator.textContent = 'Downloading voice model / Synthesizing full audio (this may take a moment for long text)...';
+            hideError();
+            statusIndicator.textContent = 'Downloading voice model / Synthesizing full audio (this may take a moment)...';
             statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Synthesizing...';
             statusBadge.className = 'px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium flex items-center gap-2';
 
@@ -211,32 +230,31 @@
                     body: JSON.stringify({
                         text: text,
                         voice: voiceSelect.value,
-                        speed: parseFloat(speedSelect.value),
-                        pauseSilence: parseFloat(pauseSelect.value)
+                        speed: parseFloat(speedSelect.value)
                     })
                 });
 
-                const result = await response.json();
-                if (response.ok && result.success) {
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+
                     statusIndicator.textContent = 'Synthesis complete!';
                     statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Ready';
                     statusBadge.className = 'px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2';
                     
                     audioContainer.classList.remove('hidden');
-                    audioPlayer.src = `${result.audio_url}?t=${new Date().getTime()}`;
+                    audioPlayer.src = audioUrl;
                     audioPlayer.play();
-                    downloadLink.href = result.audio_url;
+                    downloadLink.href = audioUrl;
                 } else {
-                    statusIndicator.textContent = 'Synthesis error.';
-                    statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error';
-                    statusBadge.className = 'px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium flex items-center gap-2';
-                    alert(result.error || 'Failed to synthesize audio.');
+                    const result = await response.json();
+                    throw new Error(result.error || 'Failed to synthesize audio.');
                 }
             } catch (err) {
-                statusIndicator.textContent = 'Network or server error.';
+                statusIndicator.textContent = 'Synthesis error.';
                 statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error';
                 statusBadge.className = 'px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium flex items-center gap-2';
-                alert('An error occurred: ' + err.message);
+                showError(err.message);
             } finally {
                 convertBtn.disabled = false;
             }

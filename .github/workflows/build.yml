@@ -30,11 +30,10 @@ jobs:
 
     - name: Package with PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --windowed --add-data "templates;templates" --add-data "piper;piper" --name "TTS_App" app.py
+        pyinstaller --noconfirm --onedir --windowed --add-data "templates;templates" --add-data "piper;piper" --hidden-import=flask --collect-all=flask --name "TTS_App" app.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: TTS_App_Windows
         path: dist/TTS_App
-        
