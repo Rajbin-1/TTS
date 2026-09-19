@@ -172,8 +172,154 @@ def get_piper_executable():
             return candidate
     return "piper"
 
-def execute_piper_headless(cmd, input_text, timeout=120):
-    """Execute Piper CLI completely headless without black console windows on Windows."""
+# ---------------------------------------------------------------------------
+# Voice Model Download Integrity & Self-Healing Protocol
+# ---------------------------------------------------------------------------
+def is_valid_onnx(file_path):
+    """Verify ONNX model file exists, is non-zero, not an HTML error page, and >= 1MB."""
+    if not os.path.exists(file_path):
+        return False
+    size = os.path.getsize(file_path)
+    # Valid Piper models are at least 15MB; CDN 404/rate-limit error pages are < 100KB
+    if size < 1_000_000:
+        return False
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(512)
+            # Verify it is not an HTML error response from HuggingFace
+            if b"<!DOCTYPE" in header or b"<html" in header or b"404: Not Found" in header:
+                return False
+            # Ensure valid readable non-empty binary header
+            return len(header) >= 16
+    except Exception:
+        return False
+
+def is_valid_onnx_json(file_path):
+    """Verify JSON configuration exists, is non-zero, and is valid parseable JSON."""
+    if not os.path.exists(file_path):
+        return False
+    if os.path.getsize(file_path) < 50:
+        return False
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return isinstance(data, dict) and bool(data)
+    except Exception:
+        return False
+
+def is_voice_healthy(voice_key):
+    """Check if both .onnx and .onnx.json are present and valid."""
+    if voice_key not in VOICES:
+        return False
+    info = VOICES[voice_key]
+    onnx_path = os.path.join(VOICES_DIR, info["onnx"])
+    json_path = os.path.join(VOICES_DIR, info["json"])
+    return is_valid_onnx(onnx_path) and is_valid_onnx_json(json_path)
+
+def download_file_safe(url, destination_path, file_desc=""):
+    """
+    Download file using a temporary .downloading extension.
+    Renames to destination_path only upon verified completion.
+    Provides streaming progress logging.
+    """
+    temp_path = destination_path + ".downloading"
+    if os.path.exists(temp_path):
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+
+    print(f"[Model Downloader] Starting download for {file_desc}: {url}")
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PiperTTS/1.0"}
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response, open(temp_path, "wb") as out_file:
+            total_size = response.headers.get("content-length")
+            total_size = int(total_size) if total_size else None
+            downloaded = 0
+            last_pct_logged = -10
+
+            chunk_size = 128 * 1024  # 128 KB chunks
+            while True:
+                chunk = response.read(chunk_size)
+                if not chunk:
+                    break
+                out_file.write(chunk)
+                downloaded += len(chunk)
+                if total_size:
+                    pct = int((downloaded / total_size) * 100)
+                    if pct >= last_pct_logged + 10:
+                        mb_done = downloaded / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024)
+                        print(f"[Model Downloader] {file_desc}: {pct}% ({mb_done:.1f}MB / {mb_total:.1f}MB)")
+                        last_pct_logged = pct
+
+        # Atomic replace to prevent half-downloaded execution
+        if os.path.exists(destination_path):
+            try:
+                os.remove(destination_path)
+            except Exception:
+                pass
+        os.replace(temp_path, destination_path)
+        print(f"[Model Downloader] Finished and verified: {file_desc}")
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        raise RuntimeError(f"Download failed for {file_desc} ({url}): {str(e)}")
+
+def ensure_voice_downloaded(voice_key):
+    """
+    Check voice model integrity in ~/.piper_tts_app/voices.
+    If missing, 0-byte, or corrupted, automatically re-downloads cleanly with .downloading temp extension.
+    """
+    if voice_key not in VOICES:
+        raise ValueError(f"Unknown voice key: {voice_key}")
+
+    voice_info = VOICES[voice_key]
+    onnx_path = os.path.join(VOICES_DIR, voice_info["onnx"])
+    json_path = os.path.join(VOICES_DIR, voice_info["json"])
+
+    # 1. Check and re-download .onnx if missing, zero-byte, or corrupt
+    if not is_valid_onnx(onnx_path):
+        if os.path.exists(onnx_path):
+            print(f"[Model Downloader] Detected corrupt or invalid model file ({os.path.getsize(onnx_path)} bytes). Removing for clean re-download: {onnx_path}")
+            try:
+                os.remove(onnx_path)
+            except Exception:
+                pass
+        download_file_safe(voice_info["url_onnx"], onnx_path, f"{voice_info['name']} [.onnx]")
+        if not is_valid_onnx(onnx_path):
+            raise RuntimeError(f"Downloaded model failed integrity check: {onnx_path}")
+
+    # 2. Check and re-download .onnx.json if missing, zero-byte, or invalid JSON
+    if not is_valid_onnx_json(json_path):
+        if os.path.exists(json_path):
+            print(f"[Model Downloader] Detected corrupt or invalid config file. Removing for clean re-download: {json_path}")
+            try:
+                os.remove(json_path)
+            except Exception:
+                pass
+        download_file_safe(voice_info["url_json"], json_path, f"{voice_info['name']} [.json]")
+        if not is_valid_onnx_json(json_path):
+            raise RuntimeError(f"Downloaded config failed JSON validation: {json_path}")
+
+    return onnx_path
+
+# ---------------------------------------------------------------------------
+# Subprocess IO Isolation & Timeout Safeguards
+# ---------------------------------------------------------------------------
+def execute_piper_headless(cmd, input_text, timeout=15, cleanup_file=None):
+    """
+    Execute Piper CLI completely headless without black console windows on Windows.
+    Enforces UTF-8 byte encoding and strict process timeout isolation.
+    Safely kills child processes and cleans up partial audio files on timeout or error.
+    """
     creationflags = 0
     startupinfo = None
     if os.name == "nt":
@@ -181,13 +327,13 @@ def execute_piper_headless(cmd, input_text, timeout=120):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0x00000001)
 
+    # Use raw byte streams for stdin/stdout/stderr for strict UTF-8 byte isolation
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
+        text=False,
         creationflags=creationflags,
         startupinfo=startupinfo
     )
@@ -196,31 +342,53 @@ def execute_piper_headless(cmd, input_text, timeout=120):
         active_processes.add(proc)
 
     try:
-        stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
+        input_bytes = input_text.encode("utf-8")
+        stdout_bytes, stderr_bytes = proc.communicate(input=input_bytes, timeout=timeout)
+
+        stdout_str = stdout_bytes.decode("utf-8", errors="replace")
+        stderr_str = stderr_bytes.decode("utf-8", errors="replace")
+
         if proc.returncode != 0:
-            raise RuntimeError(f"Piper execution failed (exit code {proc.returncode}): {stderr.strip()}")
-        return stdout, stderr
+            if cleanup_file and os.path.exists(cleanup_file):
+                try:
+                    os.remove(cleanup_file)
+                except Exception:
+                    pass
+            raise RuntimeError(f"Piper execution failed (exit code {proc.returncode}): {stderr_str.strip()}")
+
+        return stdout_str, stderr_str
+
+    except subprocess.TimeoutExpired:
+        print(f"[Process Manager] Synthesis timed out after {timeout}s! Terminating piper process...")
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        # Drain buffers to prevent resource leaks
+        try:
+            proc.communicate(timeout=2)
+        except Exception:
+            pass
+        # Wipe any invalid partial audio file
+        if cleanup_file and os.path.exists(cleanup_file):
+            try:
+                os.remove(cleanup_file)
+                print(f"[Process Manager] Cleaned up partial audio file: {cleanup_file}")
+            except Exception:
+                pass
+        raise TimeoutError(f"Speech synthesis timed out after {timeout} seconds. The process was safely terminated.")
+
+    except Exception as e:
+        if cleanup_file and os.path.exists(cleanup_file) and os.path.getsize(cleanup_file) == 0:
+            try:
+                os.remove(cleanup_file)
+            except Exception:
+                pass
+        raise e
+
     finally:
         with process_lock:
             active_processes.discard(proc)
-
-def ensure_voice_downloaded(voice_key):
-    """Check if voice model is present in ~/.piper_tts_app/voices, or download it."""
-    if voice_key not in VOICES:
-        raise ValueError(f"Unknown voice key: {voice_key}")
-    
-    voice_info = VOICES[voice_key]
-    onnx_path = os.path.join(VOICES_DIR, voice_info["onnx"])
-    json_path = os.path.join(VOICES_DIR, voice_info["json"])
-
-    if not os.path.exists(onnx_path):
-        print(f"[Model Downloader] Downloading model: {voice_info['onnx']}")
-        urllib.request.urlretrieve(voice_info["url_onnx"], onnx_path)
-    if not os.path.exists(json_path):
-        print(f"[Model Downloader] Downloading config: {voice_info['json']}")
-        urllib.request.urlretrieve(voice_info["url_json"], json_path)
-
-    return onnx_path
 
 # ---------------------------------------------------------------------------
 # Heartbeat & Auto-Shutdown Watchdog
@@ -283,8 +451,7 @@ def shutdown():
 def get_voices():
     result = []
     for key, v in VOICES.items():
-        onnx_file = os.path.join(VOICES_DIR, v["onnx"])
-        is_cached = os.path.exists(onnx_file)
+        is_cached = is_voice_healthy(key)
         result.append({
             "key": key,
             "name": v["name"],
@@ -317,7 +484,9 @@ def preview_voice():
     ]
 
     try:
-        execute_piper_headless(cmd, preview_phrase, timeout=30)
+        execute_piper_headless(cmd, preview_phrase, timeout=15, cleanup_file=preview_filepath)
+    except TimeoutError as te:
+        return jsonify({"error": str(te), "timeout": True}), 504
     except Exception as e:
         return jsonify({"error": f"Preview synthesis failed: {str(e)}"}), 500
 
@@ -371,7 +540,9 @@ def synthesize():
     ]
 
     try:
-        execute_piper_headless(cmd, text, timeout=180)
+        execute_piper_headless(cmd, text, timeout=15, cleanup_file=output_filepath)
+    except TimeoutError as te:
+        return jsonify({"error": str(te), "timeout": True}), 504
     except Exception as e:
         return jsonify({"error": f"Speech generation error: {str(e)}"}), 500
 
