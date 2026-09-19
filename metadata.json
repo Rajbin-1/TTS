@@ -1,0 +1,6 @@
+{
+  "name": "Offline Book TTS App",
+  "description": "Self-contained Python and web-based offline Text-to-Speech application for long book readings with automatic voice downloading and PyInstaller support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

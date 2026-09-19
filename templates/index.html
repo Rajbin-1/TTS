@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Book TTS Reader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col items-center justify-start p-6">
+    <div class="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-8 border border-slate-100 mt-4">
+        <header class="mb-8 border-b border-slate-100 pb-6">
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900">Offline Book TTS Reader</h1>
+            <p class="text-slate-500 mt-1">Convert long book chapters into natural offline audio using Piper TTS.</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <label for="voice-select" class="block text-sm font-medium text-slate-700 mb-2">Voice / Accent</label>
+                <select id="voice-select" class="w-full rounded-xl border border-slate-300 py-3 px-4 bg-white text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    {% for key, voice in voices.items() %}
+                    <option value="{{ key }}">{{ voice.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="speed-select" class="block text-sm font-medium text-slate-700 mb-2">Reading Speed</label>
+                <select id="speed-select" class="w-full rounded-xl border border-slate-300 py-3 px-4 bg-white text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="0.8">0.8x (Slower)</option>
+                    <option value="1.0" selected>1.0x (Normal)</option>
+                    <option value="1.25">1.25x (Faster)</option>
+                    <option value="1.5">1.5x (Fast)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <label for="book-text" class="block text-sm font-medium text-slate-700 mb-2">Book Text / Chapter Content</label>
+            <textarea id="book-text" rows="12" class="w-full rounded-xl border border-slate-300 p-4 font-sans text-slate-800 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 placeholder-slate-400" placeholder="Paste your long book chapter or text here..."></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <button id="convert-btn" class="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50">
+                Convert to Audio
+            </button>
+            <div id="status-indicator" class="text-sm font-medium text-slate-500 h-6 flex items-center">Ready</div>
+        </div>
+
+        <div id="audio-container" class="mt-8 hidden border-t border-slate-100 pt-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-3">Generated Audio Player</h2>
+            <audio id="audio-player" controls class="w-full rounded-xl">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+    </div>
+
+    <script>
+        const convertBtn = document.getElementById('convert-btn');
+        const statusIndicator = document.getElementById('status-indicator');
+        const bookText = document.getElementById('book-text');
+        const voiceSelect = document.getElementById('voice-select');
+        const speedSelect = document.getElementById('speed-select');
+        const audioContainer = document.getElementById('audio-container');
+        const audioPlayer = document.getElementById('audio-player');
+
+        convertBtn.addEventListener('click', async () => {
+            const text = bookText.value.trim();
+            if (!text) {
+                alert('Please enter some text to synthesize.');
+                return;
+            }
+
+            convertBtn.disabled = true;
+            statusIndicator.textContent = 'Downloading voice model / Synthesizing audio...';
+
+            try {
+                const response = await fetch('/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: voiceSelect.value,
+                        speed: parseFloat(speedSelect.value)
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    statusIndicator.textContent = 'Done!';
+                    audioContainer.classList.remove('hidden');
+                    audioPlayer.src = `${result.audio_url}?t=${new Date().getTime()}`;
+                    audioPlayer.play();
+                } else {
+                    statusIndicator.textContent = 'Error during synthesis.';
+                    alert(result.error || 'Failed to synthesize audio.');
+                }
+            } catch (err) {
+                statusIndicator.textContent = 'Network or server error.';
+                alert('An error occurred: ' + err.message);
+            } finally {
+                convertBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
